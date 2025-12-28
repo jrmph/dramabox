@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DramaBox API Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        deepSlate: '#0f172a',
+                        cardSlate: '#1e293b', 
+                        accentIndigo: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        pre::-webkit-scrollbar { height: 8px; width: 8px; }
+        pre::-webkit-scrollbar-thumb { background-color: #4b5563; border-radius: 4px; }
+        pre::-webkit-scrollbar-track { background-color: #111827; }
+    </style>
+</head>
+<body class="bg-deepSlate text-slate-300 font-sans antialiased selection:bg-accentIndigo selection:text-white">
+
+    <nav class="bg-accentIndigo text-white shadow-lg border-b border-indigo-500/30">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center tracking-wide">
+                <span class="text-2xl mr-2">📺</span> DramaBox API
+            </h1>
+            <span class="text-xs bg-indigo-800/50 border border-indigo-400/30 px-2 py-1 rounded text-indigo-100">v1.1.0</span>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-8 max-w-5xl">
+        <div class="mb-8 border-b border-slate-700 pb-6">
+            <h2 class="text-2xl font-bold mb-2 text-white">Documentation & Testing</h2>
+            <p class="text-slate-400">Please use the <strong class="text-accentIndigo">"Test Endpoint"</strong> buttons below to simulate requests directly to the server.</p>
+        </div>
+
+        <div class="grid gap-8">
+            
+            <!-- SEARCH -->
+            <div class="bg-cardSlate rounded-xl shadow-xl border border-slate-700 overflow-hidden">
+                <div class="bg-slate-800/50 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-0.5 rounded">GET</span>
+                        <span class="font-mono text-sm font-bold text-slate-200">/api/search</span>
+                    </div>
+                    <span class="text-sm text-slate-500">Search Content</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-xs text-slate-400 mb-2 font-mono">Query Parameter: <code class="text-accentIndigo">?q={keyword}</code></p>
+                    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" id="input-search" placeholder="Enter title (e.g., CEO)" class="flex-1 bg-deepSlate border border-slate-600 text-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accentIndigo transition-colors placeholder-slate-600">
+                        <button onclick="testApi('search')" class="bg-accentIndigo hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20">Test Endpoint</button>
+                    </div>
+                    <div id="result-search" class="hidden mt-4">
+                        <div class="relative">
+                            <div class="absolute top-0 left-0 bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded-br">JSON Result</div>
+                            <pre class="bg-[#0b101e] text-emerald-400 p-4 pt-8 rounded border border-slate-800 text-xs overflow-auto max-h-60 font-mono"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LATEST -->
+            <div class="bg-cardSlate rounded-xl shadow-xl border border-slate-700 overflow-hidden">
+                <div class="bg-slate-800/50 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-0.5 rounded">GET</span>
+                        <span class="font-mono text-sm font-bold text-slate-200">/api/latest</span>
+                    </div>
+                    <span class="text-sm text-slate-500">Latest Updates</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-xs text-slate-400 mb-2 font-mono">Query Parameter: <code class="text-accentIndigo">?page={number}</code></p>
+                    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="number" id="input-latest" value="1" placeholder="Page" class="w-24 bg-deepSlate border border-slate-600 text-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accentIndigo transition-colors">
+                        <button onclick="testApi('latest')" class="bg-accentIndigo hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20">Test Endpoint</button>
+                    </div>
+                    <div id="result-latest" class="hidden mt-4">
+                        <pre class="bg-[#0b101e] text-emerald-400 p-4 rounded border border-slate-800 text-xs overflow-auto max-h-60 font-mono"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TRENDING -->
+            <div class="bg-cardSlate rounded-xl shadow-xl border border-slate-700 overflow-hidden">
+                <div class="bg-slate-800/50 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-0.5 rounded">GET</span>
+                        <span class="font-mono text-sm font-bold text-slate-200">/api/trending</span>
+                    </div>
+                    <span class="text-sm text-slate-500">Popular Content</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-xs text-slate-400 mb-2 font-mono">No additional parameters required.</p>
+                    <button onclick="testApi('trending')" class="bg-accentIndigo hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20">Test Endpoint</button>
+                    <div id="result-trending" class="hidden mt-4">
+                        <pre class="bg-[#0b101e] text-emerald-400 p-4 rounded border border-slate-800 text-xs overflow-auto max-h-60 font-mono"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DETAIL -->
+            <div class="bg-cardSlate rounded-xl shadow-xl border border-slate-700 overflow-hidden">
+                <div class="bg-slate-800/50 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-0.5 rounded">GET</span>
+                        <span class="font-mono text-sm font-bold text-slate-200">/api/detail</span>
+                    </div>
+                    <span class="text-sm text-slate-500">Metadata & Details</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-xs text-slate-400 mb-2 font-mono">Query Parameter: <code class="text-accentIndigo">?bookId={id}</code></p>
+                    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" id="input-detail" value="41000122793" placeholder="Enter Book ID" class="flex-1 bg-deepSlate border border-slate-600 text-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accentIndigo transition-colors">
+                        <button onclick="testApi('detail')" class="bg-accentIndigo hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20">Test Endpoint</button>
+                    </div>
+                    <div id="result-detail" class="hidden mt-4">
+                        <pre class="bg-[#0b101e] text-emerald-400 p-4 rounded border border-slate-800 text-xs overflow-auto max-h-80 font-mono"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STREAM -->
+            <div class="bg-cardSlate rounded-xl shadow-xl border border-accentIndigo/30 ring-1 ring-accentIndigo/20 overflow-hidden">
+                <div class="bg-indigo-900/20 px-6 py-4 border-b border-accentIndigo/20 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-0.5 rounded">GET</span>
+                        <span class="font-mono text-sm font-bold text-slate-200">/api/stream</span>
+                    </div>
+                    <span class="text-sm font-bold text-accentIndigo">Stream Access (AJAX)</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-xs text-slate-400 mb-2 font-mono">Query Parameters: <code class="text-accentIndigo">?bookId={id}&episode={num}</code></p>
+                    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" id="input-stream-book" value="41000122793" placeholder="Book ID" class="flex-1 bg-deepSlate border border-slate-600 text-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accentIndigo transition-colors">
+                        <input type="number" id="input-stream-ep" value="1" placeholder="Ep" class="w-20 bg-deepSlate border border-slate-600 text-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accentIndigo transition-colors">
+                        <button onclick="testApi('stream')" class="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white px-4 py-2 rounded text-sm font-medium shadow-lg shadow-indigo-500/25 transition-all">Get Stream</button>
+                    </div>
+                    <div id="result-stream" class="hidden mt-4">
+                        <pre class="bg-[#0b101e] text-emerald-400 p-4 rounded border border-slate-800 text-xs overflow-auto max-h-80 font-mono"></pre>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        
+        <footer class="mt-16 text-center text-slate-500 text-sm pb-8 border-t border-slate-800 pt-8">
+            &copy; 2025 DramaBox API Scraper &mdash; Developed by 
+            <a href="https://regexd.com" target="_blank" class="text-accentIndigo hover:text-indigo-400 font-medium transition-colors hover:underline">
+                regexd.com
+            </a>
+        </footer>
+    </main>
+
+    <script>
+        async function testApi(type) {
+            let url = '';
+            const resultDiv = document.getElementById(`result-${type}`);
+            const preTag = resultDiv.querySelector('pre');
+            
+            resultDiv.classList.remove('hidden');
+            preTag.textContent = '⏳ Processing request...';
+            preTag.classList.add('animate-pulse');
+
+            try {
+                if (type === 'search') {
+                    const query = document.getElementById('input-search').value;
+                    if(!query) throw new Error('Please enter a search keyword.');
+                    url = `/api/search?q=${encodeURIComponent(query)}`;
+                } 
+                else if (type === 'latest') {
+                    const page = document.getElementById('input-latest').value;
+                    url = `/api/latest?page=${page}`;
+                } 
+                else if (type === 'trending') {
+                    url = `/api/trending`;
+                } 
+                else if (type === 'detail') {
+                    const bookId = document.getElementById('input-detail').value;
+                    if(!bookId) throw new Error('Please enter a Book ID.');
+                    url = `/api/detail?bookId=${bookId}`;
+                } 
+                else if (type === 'stream') {
+                    const bookId = document.getElementById('input-stream-book').value;
+                    const ep = document.getElementById('input-stream-ep').value;
+                    if(!bookId || !ep) throw new Error('Book ID and Episode parameters are required.');
+                    url = `/api/stream?bookId=${bookId}&episode=${ep}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                preTag.classList.remove('animate-pulse');
+                preTag.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                preTag.classList.remove('animate-pulse');
+                preTag.classList.remove('text-emerald-400');
+                preTag.classList.add('text-red-400');
+                preTag.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
+
