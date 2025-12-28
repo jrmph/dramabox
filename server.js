@@ -2,273 +2,245 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path');
+const cors = require('cors'); // Added CORS for external access
 const app = express();
 const PORT = 3000;
 
-const BASE_URL = 'https://regexd.com/base.php';
-const SEARCH_URL = 'https://regexd.com/base.php';
-const DETAIL_URL = 'https://regexd.com/base.php';
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const TARGET_URL = 'https://regexd.com/base.php';
+const MAX_RETRIES = 3;
+const TIMEOUT = 15000; // 15 Seconds timeout
 
-const getHeaders = () => ({
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-  'X-Requested-With': 'XMLHttpRequest'
+// Enable CORS and JSON parsing
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ==========================================
+// ADVANCED UTILITIES
+// ==========================================
+
+// 1. Browser-like Headers Generator
+const getHeaders = (referer = TARGET_URL) => ({
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Referer': referer,
+  'X-Requested-With': 'XMLHttpRequest', // Important for PHP AJAX handlers
+  'Connection': 'keep-alive',
+  'Sec-Fetch-Dest': 'empty',
+  'Sec-Fetch-Mode': 'cors',
+  'Sec-Fetch-Site': 'same-origin',
 });
 
-const extractBookId = (url) => {
-  if (!url) return null;
+// 2. ID Extractor (Enhanced Regex)
+const extractBookId = (urlOrString) => {
+  if (!urlOrString) return null;
   try {
-    const fullUrl = url.startsWith('http') ? url : `http://dummy.com/${url}`;
-    const urlParams = new URLSearchParams(new URL(fullUrl).search);
-    return urlParams.get('bookId');
+    // Match ?bookId=12345 or &bookId=12345
+    const match = urlOrString.match(/[?&]bookId=(\d+)/);
+    if (match) return match[1];
+    
+    // Fallback: Check if it's just a raw number
+    if (/^\d+$/.test(urlOrString)) return urlOrString;
+    
+    return null;
   } catch (e) {
     return null;
   }
 };
 
-app.use(express.static(path.join(__dirname, 'public')));
+// 3. Robust Fetcher with Retry Logic
+const fetchWithRetry = async (params, retries = MAX_RETRIES) => {
+  try {
+    const config = {
+      method: 'GET', // Change to 'POST' if the PHP file expects POST data
+      url: TARGET_URL,
+      params: params,
+      headers: getHeaders(),
+      timeout: TIMEOUT
+    };
+    
+    // console.log(`[FETCH] Requesting... (Attempt ${MAX_RETRIES - retries + 1})`);
+    const response = await axios(config);
+    return response.data;
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(`[RETRY] Request failed. Retrying in 1s... (${retries} left)`);
+      await new Promise(res => setTimeout(res, 1000));
+      return fetchWithRetry(params, retries - 1);
+    }
+    throw error;
+  }
+};
 
+// ==========================================
+// API ROUTES
+// ==========================================
+
+// Documentation Route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// 1. Search Endpoint
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
-  const lang = 'in';
-  
-  if (!query) return res.status(400).json({ error: 'Parameter q required' });
+  if (!query) return res.status(400).json({ error: 'Missing parameter: q' });
   
   try {
-    const response = await axios.get(SEARCH_URL, {
-      params: { q: query, lang },
-      headers: getHeaders()
-    });
+    const data = await fetchWithRetry({ q: query, lang: 'en' });
     
-    const $ = cheerio.load(response.data);
-    const searchResults = [];
-    const resultCountText = $('.search-results-count').text().trim();
+    // Handle if response is JSON (API mode) or HTML (Web mode)
+    let searchResults = [];
+    let resultCount = "0 results";
     
-    $('.drama-grid .drama-card').each((index, element) => {
-      const title = $(element).find('.drama-title').text().trim();
-      const cover = $(element).find('.drama-image img').attr('src');
-      let episodeText = $(element).find('.drama-meta span[itemprop="numberOfEpisodes"]').text().trim();
-      if (!episodeText) episodeText = $(element).find('.drama-meta').text().replace('👁️ 0', '').trim();
-      const linkHref = $(element).find('a.watch-button').attr('href');
+    if (typeof data === 'object') {
+      // Assume JSON response
+      // Adapt this part based on actual JSON structure if regexd returns JSON
+      if (data.data && Array.isArray(data.data)) {
+        searchResults = data.data;
+      }
+    } else {
+      // Assume HTML response (Scraping)
+      const $ = cheerio.load(data);
+      resultCount = $('.search-results-count').text().trim() || "Results found";
       
-      searchResults.push({
-        bookId: extractBookId(linkHref),
-        judul: title,
-        total_episode: episodeText.replace('📺', '').trim(),
-        cover: cover
-      });
-    });
-    
-    res.json({
-      status: 'success',
-      query,
-      info: resultCountText,
-      total_results: searchResults.length,
-      data: searchResults
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/latest', async (req, res) => {
-  const page = req.query.page || 1;
-  const lang = 'in';
-  
-  try {
-    const response = await axios.get(BASE_URL, {
-      params: { page, lang },
-      headers: getHeaders()
-    });
-    
-    const $ = cheerio.load(response.data);
-    const dramas = [];
-    
-    $('.drama-grid .drama-card').each((index, element) => {
-      const title = $(element).find('.drama-title').text().trim();
-      const cover = $(element).find('.drama-image img').attr('src');
-      const episodeText = $(element).find('.drama-meta span').text().trim();
-      const linkHref = $(element).find('a.watch-button').attr('href');
-      
-      dramas.push({
-        bookId: extractBookId(linkHref),
-        judul: title,
-        total_episode: episodeText.replace('📺', '').trim(),
-        cover: cover
-      });
-    });
-    
-    res.json({
-      status: 'success',
-      type: 'latest',
-      page: parseInt(page),
-      total: dramas.length,
-      data: dramas
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/trending', async (req, res) => {
-  const lang = 'in';
-  
-  try {
-    const response = await axios.get(BASE_URL, {
-      params: { page: 1, lang },
-      headers: getHeaders()
-    });
-    
-    const $ = cheerio.load(response.data);
-    const trendingDramas = [];
-    
-    $('.rank-list .rank-item').each((index, element) => {
-      const title = $(element).find('.rank-title').text().trim();
-      const cover = $(element).find('.rank-image img').attr('src');
-      const episodeText = $(element).find('.rank-meta span').text().trim();
-      const rankNumber = $(element).find('.rank-number').text().trim();
-      const linkHref = $(element).attr('href');
-      
-      trendingDramas.push({
-        rank: parseInt(rankNumber),
-        bookId: extractBookId(linkHref),
-        judul: title,
-        total_episode: episodeText.replace('📺', '').trim(),
-        cover: cover
-      });
-    });
-    
-    res.json({
-      status: 'success',
-      type: 'trending',
-      total: trendingDramas.length,
-      data: trendingDramas
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/detail', async (req, res) => {
-  const bookId = req.query.bookId;
-  const lang = 'in';
-  
-  if (!bookId) return res.status(400).json({ status: 'error', message: 'Parameter bookId wajib diisi.' });
-  
-  try {
-    const response = await axios.get(DETAIL_URL, {
-      params: { bookId, lang },
-      headers: getHeaders()
-    });
-    
-    const $ = cheerio.load(response.data);
-    const rawTitleHtml = $('h1.video-title').html();
-    let cleanTitle = rawTitleHtml ? rawTitleHtml.split('<span')[0].trim().replace(/ - Episode$/i, '').replace(/-$/, '').trim() : $('h1.video-title').text().trim();
-    
-    const description = $('.video-description').text().trim();
-    const cover = $('meta[itemprop="thumbnailUrl"]').attr('content');
-    const totalEpisodeText = $('.video-meta span[itemprop="numberOfEpisodes"]').text().trim();
-    const likesText = $('.video-meta span').first().text().trim();
-    
-    const episodes = [];
-    $('#episodesList .episode-btn').each((index, element) => {
-      const epNum = $(element).attr('data-episode');
-      const label = $(element).text().trim();
-      episodes.push({
-        episode_index: parseInt(epNum),
-        episode_label: label,
-      });
-    });
-    
-    res.json({
-      status: 'success',
-      bookId: bookId,
-      judul: cleanTitle,
-      deskripsi: description,
-      cover: cover,
-      total_episode: totalEpisodeText.replace('📺', '').trim(),
-      likes: likesText.replace('❤️', '').trim(),
-      jumlah_episode_tersedia: episodes.length,
-      episodes: episodes
-    });
-    
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: 'Gagal mengambil detail drama', error: error.message });
-  }
-});
-
-app.get('/api/stream', async (req, res) => {
-  const { bookId, episode } = req.query;
-  const lang = req.query.lang || 'in';
-  
-  if (!bookId || !episode) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Parameter bookId dan episode wajib diisi.'
-    });
-  }
-  
-  try {
-    const headers = {
-      ...getHeaders(),
-      'X-Requested-With': 'XMLHttpRequest',
-      'Referer': `${DETAIL_URL}?bookId=${bookId}`
-    };
-    
-    const response = await axios.get(DETAIL_URL, {
-      params: {
-        ajax: 1,
-        bookId: bookId,
-        lang: lang,
-        episode: episode
-      },
-      headers: headers
-    });
-    
-    const rawData = response.data;
-    
-    if (!rawData || !rawData.chapter) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Episode tidak ditemukan atau terkunci.'
+      $('.drama-grid .drama-card, .result-item').each((index, element) => {
+        const title = $(element).find('.drama-title, .title').text().trim();
+        const cover = $(element).find('img').attr('src');
+        const link = $(element).find('a').attr('href');
+        const meta = $(element).find('.drama-meta, .meta').text().trim();
+        
+        if (title && link) {
+          searchResults.push({
+            bookId: extractBookId(link),
+            title: title,
+            cover: cover,
+            meta: meta,
+            raw_link: link
+          });
+        }
       });
     }
     
-    const formattedResult = {
-      status: "success",
-      apiBy: "regexd.com",
-      data: {
-        bookId: bookId.toString(),
-        allEps: rawData.totalEpisodes,
-        chapter: {
-          id: rawData.chapter.id,
-          index: rawData.chapter.index,
-          indexCode: rawData.chapter.indexStr,
-          duration: rawData.chapter.duration,
-          cover: rawData.chapter.cover,
-          video: {
-            mp4: rawData.chapter.mp4,
-            m3u8: rawData.chapter.m3u8Url
-          }
-        }
-      }
-    };
-    
-    res.json(formattedResult);
+    res.json({
+      status: 'success',
+      source: 'regexd.com',
+      query,
+      info: resultCount,
+      count: searchResults.length,
+      data: searchResults
+    });
     
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Gagal mengambil stream',
-      error: error.message
+    console.error('[SEARCH ERROR]', error.message);
+    res.status(502).json({ error: 'Upstream error', details: error.message });
+  }
+});
+
+// 2. Detail Endpoint
+app.get('/api/detail', async (req, res) => {
+  const bookId = req.query.bookId;
+  if (!bookId) return res.status(400).json({ error: 'Missing parameter: bookId' });
+  
+  try {
+    const data = await fetchWithRetry({ bookId: bookId, lang: 'en' });
+    const $ = cheerio.load(data);
+    
+    // Advanced Scraping Strategy: Try multiple selectors just in case class names change
+    const title = $('h1.video-title').text().trim() || $('h1').first().text().trim();
+    const desc = $('.video-description').text().trim() || $('meta[name="description"]').attr('content');
+    const cover = $('meta[property="og:image"]').attr('content') || $('.video-cover img').attr('src');
+    
+    const episodes = [];
+    // Support multiple episode list formats
+    $('#episodesList .episode-btn, .chapter-list a').each((i, el) => {
+      const id = $(el).attr('data-episode') || $(el).attr('data-id');
+      const name = $(el).text().trim();
+      if (id) {
+        episodes.push({ index: parseInt(id), name: name });
+      }
     });
+    
+    res.json({
+      status: 'success',
+      bookId,
+      title,
+      description: desc,
+      cover,
+      total_episodes: episodes.length,
+      episodes
+    });
+    
+  } catch (error) {
+    console.error('[DETAIL ERROR]', error.message);
+    res.status(502).json({ error: 'Upstream error', details: error.message });
+  }
+});
+
+// 3. Stream Endpoint (The tricky one)
+app.get('/api/stream', async (req, res) => {
+  const { bookId, episode } = req.query;
+  if (!bookId || !episode) return res.status(400).json({ error: 'Missing bookId or episode' });
+  
+  try {
+    // Many PHP video backends require "ajax=1" to return JSON instead of HTML
+    const data = await fetchWithRetry({
+      bookId,
+      episode,
+      lang: 'en',
+      ajax: 1, // Force AJAX mode
+      source: 'detail'
+    });
+    
+    // Validation: Ensure we got a valid object
+    if (typeof data !== 'object') {
+      throw new Error('Invalid response format (Expected JSON, got HTML string)');
+    }
+    
+    res.json({
+      status: 'success',
+      data: data // Forwarding raw data from regexd
+    });
+    
+  } catch (error) {
+    console.error('[STREAM ERROR]', error.message);
+    res.status(502).json({
+      status: 'error',
+      message: 'Failed to retrieve stream. The link might be encrypted or protected.',
+      details: error.message
+    });
+  }
+});
+
+// 4. Latest Endpoint
+app.get('/api/latest', async (req, res) => {
+  const page = req.query.page || 1;
+  try {
+    const data = await fetchWithRetry({ page, lang: 'en' });
+    const $ = cheerio.load(data);
+    const results = [];
+    
+    $('.drama-grid .drama-card').each((i, el) => {
+      const link = $(el).find('a').attr('href');
+      results.push({
+        bookId: extractBookId(link),
+        title: $(el).find('.drama-title').text().trim(),
+        cover: $(el).find('img').attr('src')
+      });
+    });
+    
+    res.json({ status: 'success', page, data: results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
+  console.log(`\n🚀 ADVANCED SERVER RUNNING`);
+  console.log(`Target: ${TARGET_URL}`);
+  console.log(`URL: http://localhost:${PORT}`);
 });
